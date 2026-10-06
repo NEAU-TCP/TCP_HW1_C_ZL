@@ -2,7 +2,7 @@
 
 int main()
 {
-	int T,Hour,Min,S = 0;
+	int T = 0,Hour = 0,Min = 0,S = 0;
 	
 	scanf("%d",&T);
 	

@@ -2,7 +2,7 @@
 
 int main()
 {
-    int N,Count,Sum = 0;
+    int N = 0,Count = 0,Sum = 0;
     scanf("%d",&N);
     
     for(int i=0; i<N; i++)
