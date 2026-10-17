@@ -1,0 +1,233 @@
+﻿设备管理系统说明文档
+
+1. 程序整体架构
+
+id 只允许每个设备输入一种
+main.c 负责菜单和功能调用；creatbook.h 定义结构体和声明函数；creatbook.c 实现设备操作。
+每个 Device 节点保存 id、name、status 和指向下一个节点的 pNext。pHead 指向第一个节点，空链表的 pHead 为 NULL，尾节点的 pNext 为 NULL。
+设备状态按照现有中文注释规定：1 可使用，2 维修，3 不可使用。
+保留原函数命名和菜单编号：1 新增，2 查询，3 删除，4 修改状态，5 遍历，6 统计，7 小巧思，8 退出。
+
+2. 功能模块说明
+
+Creat(pHead)：新增操作入口，调用 add，返回操作后的头指针。主函数使用 pHead = Creat(pHead) 接收结果。
+add(pHead)：输入 id、name 和 status，检查重复编号和状态范围，申请节点并插入链表尾部，返回头指针。失败时保留原链表。
+Find(pHead)：输入目标 id，从头遍历，找到后直接输出设备信息，无返回值。
+Delete(pHead)：输入目标 id，找到后调整指针连接并释放节点，返回新的头指针。主函数使用 pHead = Delete(pHead) 接收结果。
+modify(pHead)：输入 id，找到设备后读取新状态，仅修改 status，无返回值。
+PrintInf(pHead)：从头到尾逐个输出设备，空链表显示提示，无返回值。
+Count(pHead)：统计设备总数及三种状态的数量，无返回值。保留当前项目已有的统计功能。
+Free(pHead)：逐个释放设备节点，无返回值。主函数调用后将自己的 pHead 置为 NULL。
+
+3. 程序实现思路
+
+建立链表：主函数将 pHead 初始化为 NULL。新增时使用 malloc 为节点申请内存，填写三个设备字段，并将 pNext 设为 NULL。
+插入节点：空链表直接让 pHead 指向新节点；非空链表通过 pLast 找到尾节点，再执行 pLast->pNext = pNode。重复编号不添加。
+查询和修改：使用 while(pHead != NULL) 逐个比较 id，找到后直接打印或修改 status。移动函数内的头指针副本不会改变 main 中的链表入口。
+删除节点：pLast 保存前驱节点，pNewHead 保存新头指针。删除首节点时更新 pNewHead；删除其他节点时，让前驱节点指向目标节点的后继。完成连接后再 free 目标节点。
+遍历输出：每输出一个节点，就执行 pHead = pHead->pNext，直到 NULL。
+释放内存：先保存后继节点地址，再释放当前节点，继续处理后继节点。退出菜单循环后统一调用 Free，避免遗漏剩余节点。
+基本输入：直接使用 scanf，不再设置额外输入函数。id 应为正整数，status 为 1 至 3，名称最多 99 字节且可以包含空格。输入失败会返回菜单；若无效字符仍留在输入流中，下一次菜单读取失败将退出并释放链表。本版没有完整的错误输入重试功能。请输入正常范围内的整数，名称不要超过长度限制。
+数据仅保存在内存中，退出后不保留。
+
+4. 核心代码及解释
+
+（1）设备结构体
+在程序中体现
+
+pNext 用于连接下一个设备节点。各字段原有的中文注释保持不变。
+
+struct Device *add(struct Device *pHead)
+{
+    struct Device *pNode = NULL;
+    struct Device *pLast = pHead;
+    char cName[100];
+    int id;
+    int status;
+
+    printf("device id:");
+    if(scanf("%d", &id) != 1 || id <= 0)
+    {
+        printf("invalid id!\n");
+        return pHead;
+    }
+    //遍历原链表，检查设备编号是否重复
+    while(pLast != NULL)
+    {
+        if(pLast->id == id)
+        {
+            printf("device id already exists!\n");
+            return pHead;
+        }
+        pLast = pLast->pNext;
+    }
+    printf("device name:");
+    //读取一行名称，最多99字节，名称中可以有空格
+    if(scanf(" %99[^\n]", cName) != 1)
+    {
+        return pHead;
+    }
+    printf("status [1.available 2.repair 3.unavailable]:");
+    if(scanf("%d", &status) != 1 || status < 1 || status > 3)
+    {
+        printf("invalid status!\n");
+        return pHead;
+    }
+
+    //动态申请一个设备节点，申请失败时保留原链表
+    pNode = malloc(sizeof(struct Device));
+    if(pNode == NULL)
+    {
+        printf("not enough memory!\n");
+        return pHead;
+    }
+    pNode->id = id;
+    strcpy(pNode->name, cName);
+    pNode->status = status;
+    pNode->pNext = NULL;
+    if(pHead == NULL)
+    {
+        //空链表中，新节点就是第一个节点
+        pHead = pNode;
+    }
+    else
+    {
+        //找到尾节点，将新设备接到链表末尾
+        pLast = pHead;
+        while(pLast->pNext != NULL)
+        {
+            pLast = pLast->pNext;
+        }
+        pLast->pNext = pNode;
+    }
+    printf("add successful!\n");
+    return pHead;
+}
+
+说明：pNode 指向新节点，pLast 用于查重和寻找尾节点。先完成输入，再申请内存，申请成功后才连接到原链表。
+
+void Find(struct Device *pHead)
+{
+    int id;
+    printf("please input the device id to find:");
+    if(scanf("%d", &id) != 1)
+    {
+        return;
+    }
+    //从第一个节点开始，依次比较设备编号
+    while(pHead != NULL)
+    {
+        if(pHead->id == id)
+        {
+            printf("id:%d\tname:%s\tstatus:%d\n",
+                   pHead->id, pHead->name, pHead->status);
+            return;
+        }
+        pHead = pHead->pNext;
+    }
+    printf("can't find!\n");
+}
+
+说明：直接在函数中按 id 查找，不再通过额外查找函数。
+
+void modify(struct Device *pHead)
+{
+    int id;
+    int status;
+    printf("please input the device id to modify:");
+    if(scanf("%d", &id) != 1)
+    {
+        return;
+    }
+    //找到指定设备后，只修改状态，不改变编号和名称
+    while(pHead != NULL)
+    {
+        if(pHead->id == id)
+        {
+            printf("new status [1.available 2.repair 3.unavailable]:");
+            if(scanf("%d", &status) != 1 || status < 1 || status > 3)
+            {
+                printf("invalid status!\n");
+                return;
+            }
+            pHead->status = status;
+            printf("modify successful!\n");
+            return;
+        }
+        pHead = pHead->pNext;
+    }
+    printf("can't find!\n");
+}
+
+说明：找到目标后仅修改 status，其他字段保持不变。
+
+struct Device *Delete(struct Device *pHead)
+{
+    struct Device *pNewHead = pHead;
+    struct Device *pLast = NULL;
+    struct Device *pdelete;
+    int id;
+    printf("please input the device id to delete:");
+    if(scanf("%d", &id) != 1)
+    {
+        return pHead;
+    }
+    while(pHead != NULL)
+    {
+        if(pHead->id == id)
+        {
+            if(pLast == NULL)
+            {
+                //删除首节点，更新头指针
+                pNewHead = pHead->pNext;
+            }
+            else
+            {
+                //让前一个节点跳过当前节点，连接到后一个节点
+                pLast->pNext = pHead->pNext;
+            }
+            pdelete = pHead;
+            free(pdelete); //断开连接后，释放被删除的节点
+            printf("delete successful!\n");
+            return pNewHead;
+        }
+        pLast = pHead; //记录前一个节点
+        pHead = pHead->pNext;
+    }
+    printf("can't find!\n");
+    return pNewHead;
+}
+
+说明：pNewHead 保存删除后的入口，pLast 保存前驱。先连接前后节点，再释放目标节点，支持删除头、中、尾和唯一节点。
+
+void PrintInf(struct Device *pHead)
+{
+    printf("==============================DEVICE LIST==============================\n");
+    if(pHead == NULL)
+    {
+        printf("device list is empty!\n");
+    }
+    while(pHead != NULL)
+    {
+        //直接输出当前节点的信息，再移动到下一个节点
+        printf("id:%d\tname:%s\tstatus:%d\n",
+               pHead->id, pHead->name, pHead->status);
+        pHead = pHead->pNext;
+    }
+}
+
+说明：直接使用 printf 输出每个节点，不再调用额外打印函数。
+
+void Free(struct Device *pHead)
+{
+    while(pHead != NULL)
+    {
+        //先保存下一个节点的地址，避免释放后再访问原节点
+        struct Device *pNode = pHead->pNext;
+        free(pHead); //释放当前节点
+        pHead = pNode;
+    }
+}
+
+说明：pNode 在释放前保存后继地址，避免读取已释放的内存。main 中随后执行 pHead = NULL。
+
